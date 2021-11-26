@@ -1,13 +1,11 @@
 import React from 'react';
-import {
-  Column,
-  UseFiltersColumnOptions,
-  UseSortByColumnOptions,
-} from 'react-table';
-import { UseFormReturn } from 'react-hook-form';
+import { Column, UseSortByColumnOptions } from 'react-table';
+import { UseFormReturn, FieldError } from 'react-hook-form';
 import { Schema, SchemaField, SchemaModel } from '@paljs/types';
 import Language from './PrismaTable/language';
 import { DynamicTableProps } from './PrismaTable/dynamicTable';
+import { RegisterOptions } from 'react-hook-form/dist/types/validator';
+import { type } from 'os';
 
 export type { Schema, SchemaField, SchemaModel };
 
@@ -20,16 +18,14 @@ export type Columns = Record<
   | 'string'
   | 'list'
   | 'json',
-  Column<{ [key: string]: any }> &
-    UseFiltersColumnOptions<any> &
-    UseSortByColumnOptions<any>
+  Column<{ [key: string]: any }> & UseSortByColumnOptions<any>
 >;
 
 export interface InputProps {
   field: SchemaField;
   value: any;
   data: any;
-  error: any;
+  error: FieldError;
   register: UseFormReturn['register'];
   setValue: UseFormReturn['setValue'];
   getValues: UseFormReturn['getValues'];
@@ -66,6 +62,7 @@ interface SameProps {
   useSet?: boolean;
   tableColumns?: GetColumnsPartial;
   formInputs?: Partial<FormInputs>;
+  inputValidation?: { [model: string]: { [field: string]: RegisterOptions } };
   push: (url: string) => void;
   query: { [key: string]: any };
   onSelect?: (values: any[]) => void;
@@ -98,3 +95,10 @@ export interface ModelTableProps
   language?: Partial<typeof Language>;
   children?: DynamicTableProps['children'];
 }
+
+export type TableParentRecord = {
+  name: string;
+  value: any;
+  field: string;
+  updateRecord?: () => void;
+};

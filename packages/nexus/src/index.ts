@@ -1,15 +1,10 @@
 import { getInputType, hasEmptyTypeFields, PrismaSelect } from '@paljs/plugins';
-import {
-  enumType,
-  inputObjectType,
-  objectType,
-  plugin,
-  scalarType,
-} from 'nexus';
+import { enumType, inputObjectType, objectType, plugin } from 'nexus';
 import { NexusAcceptedTypeDef } from 'nexus/dist/builder';
 import { DMMF } from '@prisma/client/runtime';
 import { adminNexusSchemaSettings } from './admin';
 import { Settings } from './settings';
+import { getScalars } from './defaultScalar';
 
 export { Settings };
 
@@ -31,42 +26,7 @@ export const paljs = (settings?: Settings) =>
             t.nonNull.int('count');
           },
         }),
-        scalarType({
-          name: 'Json',
-          asNexusMethod: 'json',
-          description: 'Json custom scalar type',
-          serialize(value) {
-            return value;
-          },
-        }),
-        scalarType({
-          name: 'Decimal',
-          asNexusMethod: 'decimal',
-          description: 'Decimal custom scalar type',
-          serialize: (val) => parseFloat(val),
-          parseValue: (val) => parseFloat(val),
-        }),
-        scalarType({
-          name: 'BigInt',
-          asNexusMethod: 'bigint',
-          description: 'BigInt custom scalar type',
-          serialize: (val) => parseInt(val),
-          parseValue: (val) => parseInt(val),
-        }),
-        scalarType({
-          name: 'DateTime',
-          asNexusMethod: 'date',
-          description: 'Date custom scalar type',
-          parseValue(value: any) {
-            return value ? new Date(value) : null;
-          },
-          serialize(value: any) {
-            return value ? new Date(value) : null;
-          },
-          parseLiteral(ast: any) {
-            return ast.value ? new Date(ast.value) : null;
-          },
-        }),
+        ...getScalars(settings?.excludeScalar),
       ];
       const allTypes: string[] = [];
       for (const dmmf of dmmfs) {
@@ -89,7 +49,11 @@ export const paljs = (settings?: Settings) =>
           if (data.inputObjectTypes.model)
             inputObjectTypes.push(...data.inputObjectTypes.model);
           inputObjectTypes.forEach((input) => {
-            if (input.fields.length > 0) {
+            const inputFields =
+              typeof settings?.filterInputs === 'function'
+                ? settings.filterInputs(input)
+                : input.fields;
+            if (inputFields.length > 0) {
               if (!allTypes.includes(input.name)) {
                 nexusSchemaInputs.push(
                   inputObjectType({
@@ -98,29 +62,34 @@ export const paljs = (settings?: Settings) =>
                     },
                     name: input.name,
                     definition(t) {
-                      input.fields.forEach((field) => {
-                        const inputType = getInputType(field, settings);
-                        const hasEmptyType =
-                          inputType.location === 'inputObjectTypes' &&
-                          hasEmptyTypeFields(inputType.type as string, {
-                            dmmf,
-                          });
-                        if (!hasEmptyType) {
-                          const fieldConfig: {
-                            [key: string]: any;
-                            type: string;
-                          } = {
-                            type: inputType.type as string,
-                          };
-                          if (field.isRequired) {
-                            t.nonNull.field(field.name, fieldConfig);
-                          } else if (inputType.isList) {
-                            t.list.field(field.name, fieldConfig);
-                          } else {
-                            t.field(field.name, fieldConfig);
+                      inputFields
+                        .filter(
+                          (field) =>
+                            !settings?.excludeFields?.includes(field.name),
+                        )
+                        .forEach((field) => {
+                          const inputType = getInputType(field, settings);
+                          const hasEmptyType =
+                            inputType.location === 'inputObjectTypes' &&
+                            hasEmptyTypeFields(inputType.type as string, {
+                              dmmf,
+                            });
+                          if (!hasEmptyType) {
+                            const fieldConfig: {
+                              [key: string]: any;
+                              type: string;
+                            } = {
+                              type: inputType.type as string,
+                            };
+                            if (field.isRequired) {
+                              t.nonNull.field(field.name, fieldConfig);
+                            } else if (inputType.isList) {
+                              t.list.field(field.name, fieldConfig);
+                            } else {
+                              t.field(field.name, fieldConfig);
+                            }
                           }
-                        }
-                      });
+                        });
                     },
                   }),
                 );
@@ -129,7 +98,11 @@ export const paljs = (settings?: Settings) =>
             }
           });
           data.outputObjectTypes.prisma
-            .filter((type) => type.name.includes('Aggregate'))
+            .filter(
+              (type) =>
+                type.name.includes('Aggregate') ||
+                type.name.endsWith('CountOutputType'),
+            )
             .forEach((type) => {
               if (!allTypes.includes(type.name)) {
                 nexusSchemaInputs.push(
@@ -139,21 +112,26 @@ export const paljs = (settings?: Settings) =>
                     },
                     name: type.name,
                     definition(t) {
-                      type.fields.forEach((field) => {
-                        const fieldConfig: {
-                          [key: string]: any;
-                          type: string;
-                        } = {
-                          type: field.outputType.type as string,
-                        };
-                        if (field.isNullable) {
-                          t.nullable.field(field.name, fieldConfig);
-                        } else if (field.outputType.isList) {
-                          t.list.field(field.name, fieldConfig);
-                        } else {
-                          t.field(field.name, fieldConfig);
-                        }
-                      });
+                      type.fields
+                        .filter(
+                          (field) =>
+                            !settings?.excludeFields?.includes(field.name),
+                        )
+                        .forEach((field) => {
+                          const fieldConfig: {
+                            [key: string]: any;
+                            type: string;
+                          } = {
+                            type: field.outputType.type as string,
+                          };
+                          if (field.isNullable) {
+                            t.nullable.field(field.name, fieldConfig);
+                          } else if (field.outputType.isList) {
+                            t.list.field(field.name, fieldConfig);
+                          } else {
+                            t.field(field.name, fieldConfig);
+                          }
+                        });
                     },
                   }),
                 );
@@ -173,10 +151,10 @@ export const paljs = (settings?: Settings) =>
     },
     onCreateFieldResolver() {
       return async (root, args, ctx, info: any, next) => {
-        ctx.select = new PrismaSelect(
-          info,
-          settings?.prismaSelectOptions,
-        ).value;
+        ctx.select = new PrismaSelect(info, {
+          dmmf: settings?.dmmf,
+          ...settings?.prismaSelectOptions,
+        }).value;
         return await next(root, args, ctx, info);
       };
     },

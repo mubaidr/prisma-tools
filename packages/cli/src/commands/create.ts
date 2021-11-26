@@ -19,6 +19,8 @@ const frameworks: Frameworks[] = [
   'Material UI + PrismaAdmin UI',
   'Tailwind CSS',
   'Tailwind CSS + PrismaAdmin UI',
+  'Chakra UI',
+  'Chakra UI + PrismaAdmin UI',
 ];
 
 export default class Create extends Command {
@@ -145,7 +147,7 @@ export default class Create extends Command {
       this.log(
         `Please open ${chalk.bold.blue('README.md')} file and go with steps\n`,
       );
-    } catch (error) {
+    } catch (error: any) {
       this.error(error);
     }
   }

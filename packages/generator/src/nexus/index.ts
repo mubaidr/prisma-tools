@@ -22,7 +22,7 @@ export class GenerateNexus extends Generators {
   private async createModels() {
     const models = await this.models();
     const dataModels = await this.datamodel();
-    models.forEach((model) => {
+    for (const model of models) {
       if (this.isJS) {
         this.indexJS.push(model.name);
       } else {
@@ -49,12 +49,16 @@ export class GenerateNexus extends Generators {
           const dataField = this.dataField(field.name, dataModel);
           const fieldDocs = this.filterDocs(dataField?.documentation);
           const options = this.getOptions(field, fieldDocs);
+          if (this.shouldOmit(fieldDocs)) {
+            return;
+          }
           if (
             field.outputType.location === 'scalar' &&
             field.outputType.type !== 'DateTime'
           ) {
-            fileContent += `t${this.getNullOrList(field)}.${(field.outputType
-              .type as String).toLowerCase()}('${field.name}'${
+            fileContent += `t${this.getNullOrList(field)}.${(
+              field.outputType.type as String
+            ).toLowerCase()}('${field.name}'${
               fieldDocs ? `, {description: \`${fieldDocs}\`}` : ''
             })\n`;
           } else {
@@ -77,40 +81,34 @@ export class GenerateNexus extends Generators {
 
       this.createIndex(
         path,
-        ['type'].concat(this.createQueriesAndMutations(model.name)),
+        ['type'].concat(await this.createQueriesAndMutations(model.name)),
       );
-    });
+    }
   }
 
-  private createQueriesAndMutations(name: string) {
+  private async createQueriesAndMutations(name: string) {
     const exclude = this.excludedOperations(name);
     let modelIndex: string[] = [];
     if (!this.disableQueries(name)) {
       const queriesIndex: string[] = [];
       const path = this.output(name, 'queries');
-      this.queries
-        .filter((item) => !exclude.includes(item))
-        .map((item) => {
-          const itemContent = getCrud(
-            name,
-            'query',
-            item,
-            this.options.prismaName,
-            this.options.onDelete,
-            this.isJS,
-          );
-          this.createFileIfNotfound(
-            path,
-            this.withExtension(item),
-            this.formation(itemContent),
-          );
-          queriesIndex.push(item);
-        });
+      for (const item of this.queries.filter(
+        (item) => !exclude.includes(item),
+      )) {
+        const itemContent = await getCrud(name, 'query', item, this);
+        this.createFileIfNotfound(
+          path,
+          this.withExtension(item),
+          this.formation(itemContent),
+        );
+        queriesIndex.push(item);
+      }
       if (queriesIndex) {
         modelIndex.push('queries');
+        const indexPath = join(path, this.withExtension('index'));
         writeFileSync(
-          join(path, this.withExtension('index')),
-          this.formation(this.getIndexContent(queriesIndex)),
+          indexPath,
+          this.formation(this.getIndexContent(queriesIndex, indexPath)),
         );
       }
     }
@@ -118,29 +116,23 @@ export class GenerateNexus extends Generators {
     if (!this.disableMutations(name)) {
       const mutationsIndex: string[] = [];
       const path = this.output(name, 'mutations');
-      this.mutations
-        .filter((item) => !exclude.includes(item))
-        .map((item) => {
-          const itemContent = getCrud(
-            name,
-            'mutation',
-            item,
-            this.options.prismaName,
-            this.options.onDelete,
-            this.isJS,
-          );
-          this.createFileIfNotfound(
-            path,
-            this.withExtension(item),
-            this.formation(itemContent),
-          );
-          mutationsIndex.push(item);
-        });
+      for (const item of this.mutations.filter(
+        (item) => !exclude.includes(item),
+      )) {
+        const itemContent = await getCrud(name, 'mutation', item, this);
+        this.createFileIfNotfound(
+          path,
+          this.withExtension(item),
+          this.formation(itemContent),
+        );
+        mutationsIndex.push(item);
+      }
       if (mutationsIndex) {
         modelIndex.push('mutations');
+        const indexPath = join(path, this.withExtension('index'));
         writeFileSync(
-          join(path, this.withExtension('index')),
-          this.formation(this.getIndexContent(mutationsIndex)),
+          indexPath,
+          this.formation(this.getIndexContent(mutationsIndex, indexPath)),
         );
       }
     }
@@ -149,9 +141,10 @@ export class GenerateNexus extends Generators {
 
   private createIndex(path?: string, content?: string[]) {
     if (path && content) {
+      const indexPath = join(path, this.withExtension('index'));
       writeFileSync(
-        join(path, this.withExtension('index')),
-        this.formation(this.getIndexContent(content)),
+        indexPath,
+        this.formation(this.getIndexContent(content, indexPath)),
       );
     } else {
       writeFileSync(

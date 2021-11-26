@@ -1,6 +1,6 @@
 {
   "name": "@paljs/display",
-  "version": "3.0.1",
+  "version": "4.0.0",
   "description": "Display package for the paljs CLI",
   "homepage": "https://paljs.com",
   "license": "MIT",
@@ -27,8 +27,8 @@
     "url": "git+https://github.com/paljs/prisma-tools.git"
   },
   "dependencies": {
-    "chalk": "4.1.0",
-    "ora": "5.4.0"
+    "chalk": "4.1.2",
+    "ora": "5.4.1"
   },
   "publishConfig": {
     "access": "public"

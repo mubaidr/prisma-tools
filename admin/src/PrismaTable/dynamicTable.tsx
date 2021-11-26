@@ -13,14 +13,15 @@ import Form from './Form';
 import { TableContext } from './Context';
 import EditRecord from './EditRecord';
 import { mutationDocument, queryDocument } from './QueryDocument';
-import { ContextProps } from '..';
+import { ContextProps, TableParentRecord } from '..';
 
 export interface DynamicTableProps {
-  parent?: { name: string; value: any; field: string };
+  parent?: TableParentRecord;
   inEdit?: boolean;
   model: string;
   filter?: unknown;
   connect?: any;
+  headerActions?: any;
   onConnect?: (value: any) => void;
   children?:
     | ((options: {
@@ -55,6 +56,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   connect,
   onConnect,
   children,
+  headerActions,
 }) => {
   const context = useContext(TableContext);
   const {
@@ -74,13 +76,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   const [create, setCreate] = useState(false);
   const modelObject = models.find((item) => item.id === model);
 
-  const {
-    where,
-    orderBy,
-    filterHandler,
-    sortByHandler,
-    initialFilter,
-  } = useFilterAndSort(model, inEdit ? filter : query);
+  const { where, orderBy, filterHandler, sortByHandler, initialFilter } =
+    useFilterAndSort(model, inEdit ? filter : query);
 
   const variables = {
     where,
@@ -130,15 +127,17 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   ) => {
     switch (action) {
       case 'delete':
-        deleteOne({
-          variables: {
-            where: {
-              id: value,
+        if (modelObject) {
+          deleteOne({
+            variables: {
+              where: {
+                [modelObject.idField]: value,
+              },
             },
-          },
-        }).then(() => {
-          getData();
-        });
+          }).then(() => {
+            getData();
+          });
+        }
         break;
       case 'create':
         setCreate(true);
@@ -161,6 +160,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     onSaveCreate ||
     function () {
       setCreate(false);
+      parent?.updateRecord && parent.updateRecord();
       getData();
     };
 
@@ -206,10 +206,12 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         />
       ) : (
         <Table
+          getData={getData}
           parent={parent}
           connect={connect}
           inEdit={inEdit}
           onAction={onAction}
+          headerActions={headerActions}
           model={model}
           data={
             connect && Object.keys(connect).length > 0

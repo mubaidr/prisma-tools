@@ -6,7 +6,8 @@ import Form from './Form';
 import DynamicTable from './dynamicTable';
 import { queryDocument } from './QueryDocument';
 import { TableContext } from './Context';
-import Select, { Option } from '../components/Select';
+import { Option } from '../components/Select';
+import { classNames } from '../components/css';
 
 interface EditRecordProps {
   model: string;
@@ -31,8 +32,23 @@ const EditRecord: React.FC<EditRecordProps> = ({
     dir,
   } = useContext(TableContext);
   const modelObject = models.find((item) => item.id === model);
-  const [getRecord, { data, loading, error }] = useLazyQuery(
+  const isField = modelObject?.fields.find(
+    (field) => field.name === modelObject?.idField,
+  );
+  const [getRecord, { data, loading, error, refetch }] = useLazyQuery(
     queryDocument(models, model, true, true),
+    {
+      variables: modelObject
+        ? {
+            where: {
+              [modelObject.idField]:
+                isField?.type === 'String'
+                  ? update || view
+                  : parseInt(update || view),
+            },
+          }
+        : undefined,
+    },
   );
 
   const tabs = modelObject?.fields.filter(
@@ -43,20 +59,8 @@ const EditRecord: React.FC<EditRecordProps> = ({
   const [option, setOption] = useState(options[0]);
   const relationField = tabs?.find((t) => t.id === option.id);
 
-  const isField = modelObject?.fields.find(
-    (field) => field.name === modelObject?.idField,
-  );
   if (modelObject && !data && !loading && !error) {
-    getRecord({
-      variables: {
-        where: {
-          [modelObject.idField]:
-            isField?.type === 'String'
-              ? update || view
-              : parseInt(update || view),
-        },
-      },
-    });
+    getRecord();
   }
 
   const record = data ? data[`findUnique${model}`] : {};
@@ -89,29 +93,41 @@ const EditRecord: React.FC<EditRecordProps> = ({
       </div>
       {!!tabs?.length && !!Object.keys(record).length && (
         <div className="w-full">
-          <div className="flex items-center bg-white rounded shadow-lg mb-4 p-4">
-            <div
-              className={`text-gray-700 font-bold ${
-                dir === 'rtl' ? 'ml-4' : 'mr-4'
-              }`}
-            >
-              {lang.relation}
-            </div>
-            <Select
-              dir={dir}
-              className="max-w-xs"
-              value={option}
-              onChange={setOption}
-              options={options}
-            />
-          </div>
           {relationField && (
             <DynamicTable
+              headerActions={
+                <div className="border-b border-gray-200">
+                  <nav className="-mb-px flex overflow-auto" aria-label="Tabs">
+                    {options.map((item) => (
+                      <a
+                        key={item.id}
+                        onClick={() => setOption(item)}
+                        className={classNames(
+                          item.id === option.id
+                            ? 'border-indigo-500 text-indigo-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+                          'whitespace-nowrap p-4 border-b-2 font-medium text-sm cursor-pointer',
+                        )}
+                        aria-current={
+                          item.id === option.id ? 'page' : undefined
+                        }
+                      >
+                        {item.name}
+                      </a>
+                    ))}
+                  </nav>
+                </div>
+              }
               key={relationField.type}
               model={relationField.type}
               inEdit
               filter={{ [model]: record[modelObject.idField] }}
-              parent={{ name: model, value: record, field: relationField.name }}
+              parent={{
+                name: model,
+                value: record,
+                field: relationField.name,
+                updateRecord: refetch,
+              }}
             />
           )}
         </div>

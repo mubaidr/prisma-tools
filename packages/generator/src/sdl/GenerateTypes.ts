@@ -25,6 +25,15 @@ export class GenerateTypes {
     return this.dmmf.schema;
   }
 
+  isModel(modelName: string) {
+    return (
+      !!this.dmmf.datamodel.models.find((model) => model.name === modelName) ||
+      !!this.dmmf.schema.enumTypes.model?.find(
+        (model) => model.name === modelName,
+      )
+    );
+  }
+
   capital(name: string) {
     return name.charAt(0).toUpperCase() + name.slice(1);
   }
@@ -43,10 +52,10 @@ export class GenerateTypes {
           ? `Prisma.Get${options.type
               .toString()
               .replace('Aggregate', '')}AggregateType<${options.type}Args>`
-          : options.type.toString().endsWith('AggregateOutputType')
-          ? `Prisma.${options.type}`
           : options.type.toString() === 'AffectedRowsOutput'
           ? 'Prisma.BatchPayload'
+          : !this.isModel(options.type.toString()) && !input
+          ? `Prisma.${options.type}`
           : options.type;
         return `${!input ? 'Client.' : ''}${type}${options.isList ? '[]' : ''}`;
     }
@@ -94,6 +103,12 @@ export class GenerateTypes {
     return field.inputTypes[index];
   }
 
+  getOutput(typeName: string) {
+    return this.dmmf.schema.outputObjectTypes.prisma.find(
+      (type) => type.name === typeName,
+    );
+  }
+
   run() {
     const outputTypes: string[] = [
       `export interface Resolvers {`,
@@ -117,17 +132,18 @@ export class GenerateTypes {
         const parentType = ['Query', 'Mutation'].includes(type.name)
           ? '{}'
           : `Client.${
-              type.name.startsWith('Aggregate') ||
-              type.name.endsWith('AggregateOutputType')
-                ? 'Prisma.'
-                : ''
-            }${
               type.name === 'AffectedRowsOutput'
                 ? 'Prisma.BatchPayload'
+                : !this.isModel(type.name)
+                ? 'Prisma.' + type.name
                 : type.name
             }`;
         const argsType =
-          field.args.length > 0 ? `${this.capital(field.name)}Args` : '{}';
+          field.args.length > 0
+            ? `${
+                ['Query', 'Mutation'].includes(type.name) ? '' : type.name
+              }${this.capital(field.name)}Args`
+            : '{}';
         fields.push(
           `${
             field.name
@@ -158,13 +174,13 @@ export class GenerateTypes {
             const modelName = field.outputType.type
               .toString()
               .replace('Aggregate', '');
-            args.push(
-              `count?: true`,
-              `avg?: Client.Prisma.${modelName}AvgAggregateInputType`,
-              `sum?: Client.Prisma.${modelName}SumAggregateInputType`,
-              `min?: Client.Prisma.${modelName}MinAggregateInputType`,
-              `max?: Client.Prisma.${modelName}MaxAggregateInputType`,
-            );
+            const output = this.getOutput(field.outputType.type.toString());
+            output?.fields.forEach((field) => {
+              const name = this.capital(field.name.replace('_', ''));
+              args.push(
+                `${field.name}?: Client.Prisma.${modelName}${name}AggregateInputType`,
+              );
+            });
           }
           args.push('}');
           argsTypes.push(args.join('\n'));

@@ -10,6 +10,7 @@ import deleteMany from './deleteMany';
 import updateMany from './updateMany';
 import aggregate from './aggregate';
 import { QueriesAndMutations } from '@paljs/types';
+import { GenerateNexus } from '..';
 
 const crud: { [key in QueriesAndMutations]: string } = {
   findUnique,
@@ -29,16 +30,14 @@ function capital(name: string) {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-export function getCrud(
+export async function getCrud(
   model: string,
   type: 'query' | 'mutation',
   key: QueriesAndMutations,
-  prismaName: string,
-  onDelete?: boolean,
-  isJS?: boolean,
+  generator: GenerateNexus,
 ) {
   function getImport(content: string, path: string) {
-    return isJS
+    return generator.isJS
       ? `const ${content} = require('${path}')`
       : `import ${content} from '${path}'`;
   }
@@ -68,24 +67,24 @@ export function getCrud(
     }${getImportArgs()} }`,
     'nexus',
   );
+  const args = await generator.getInputTypes(
+    capital(type),
+    (key === 'findCount' ? 'findMany' : key) + modelUpper,
+    false,
+  );
   return crud[key]
     .replace(/#{ModelName}/g, model)
-    .replace(/#{prisma}/g, prismaName)
+    .replace(/#{args}/g, args)
+    .replace(/#{prisma}/g, generator.options.prismaName)
     .replace(/#{Model}/g, modelUpper)
     .replace(/#{model}/g, modelLower)
     .replace(/#{import}/g, importString)
-    .replace(/#{as}/g, isJS ? '' : ' as any')
-    .replace(/#{exportTs}/g, isJS ? '' : 'export ')
+    .replace(/#{as}/g, generator.isJS ? '' : ' as any')
+    .replace(/#{exportTs}/g, generator.isJS ? '' : 'export ')
     .replace(
       /#{exportJs}/g,
-      isJS
+      generator.isJS
         ? `module.exports = {${modelUpper}${capital(key)}${capital(type)}}`
-        : '',
-    )
-    .replace(
-      /#{onDelete}/g,
-      onDelete
-        ? `await ${prismaName}.onDelete({ model: '${model}', where })`
         : '',
     );
 }

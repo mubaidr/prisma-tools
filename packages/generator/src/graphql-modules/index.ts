@@ -23,7 +23,7 @@ export class GenerateModules extends Generators {
   private async createModules() {
     const models = await this.models();
     const datamodel = await this.datamodel();
-    models.forEach((model) => {
+    for (const model of models) {
       let extendsTypes = '';
 
       if (!this.appModules.includes(model.name + 'Module')) {
@@ -40,6 +40,9 @@ export class GenerateModules extends Generators {
         if (!this.excludeFields(model.name).includes(field.name)) {
           const dataField = this.dataField(field.name, dataModel);
           const fieldDocs = this.filterDocs(dataField?.documentation);
+          if (this.shouldOmit(fieldDocs)) {
+            return;
+          }
           if (dataField?.kind === 'object' && model.name !== dataField.type) {
             if (!extendsTypes.includes(`extend type ${dataField.type}`)) {
               extendsTypes += `extend type ${dataField.type} {`;
@@ -57,20 +60,20 @@ export class GenerateModules extends Generators {
           }
         }
       });
-      fileContent += `}\n\n`;
+      fileContent += `\n}\n\n`;
 
       fileContent += extendsTypes;
       this.createFiles(model.name, fileContent);
-    });
+    }
   }
 
-  getOperations(model: string) {
+  async getOperations(model: string) {
     const exclude = this.excludedOperations(model);
-    return createQueriesAndMutations(model, exclude, this.options.onDelete);
+    return await createQueriesAndMutations(model, exclude, this);
   }
 
-  private createFiles(model: string, content: string) {
-    const operations = this.getOperations(model);
+  private async createFiles(model: string, content: string) {
+    const operations = await this.getOperations(model);
 
     this.mkdir(this.output(model));
 
@@ -99,7 +102,7 @@ export class GenerateModules extends Generators {
     content = `import { gql } from 'graphql-modules';
 
       export default gql\`
-      ${content}
+      ${this.formation(content, 'graphql')}
       \`;
       `;
 

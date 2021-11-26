@@ -8,20 +8,33 @@ import { getDisplayName } from '../Table/utils';
 import DynamicTable from '../dynamicTable';
 import { queryDocument } from '../QueryDocument';
 import { TableContext } from '../Context';
-import { FormInputs } from '../../types';
+import { FormInputs, ModelTableProps } from '../../types';
 import Select from '../../components/Select';
 import Checkbox from '../../components/Checkbox';
-import { buttonClasses, inputClasses } from '../../components/css';
+import { buttonClasses, classNames, inputClasses } from '../../components/css';
 import { getDate } from './getDate';
+import { SchemaField } from '@paljs/types';
 
 interface Option {
   id: any;
   name: any;
 }
 
+const getFieldValidation = (
+  field: SchemaField,
+  inputValidation: ModelTableProps['inputValidation'],
+) => {
+  const modelName = field.id.split('.')[0];
+  return inputValidation
+    ? inputValidation[modelName]
+      ? inputValidation[modelName][field.name] || {}
+      : {}
+    : {};
+};
+
 const defaultInputs: Omit<FormInputs, 'Upload' | 'Editor'> = {
   Default({ field, error, register, disabled, value }) {
-    const { lang } = useContext(TableContext);
+    const { lang, inputValidation } = useContext(TableContext);
     const options: any = {
       disabled,
       defaultValue: value
@@ -52,15 +65,24 @@ const defaultInputs: Omit<FormInputs, 'Upload' | 'Editor'> = {
     }
     return (
       <div className="flex flex-wrap w-full sm:w-1/2 pr-2 pt-2">
-        <div className="w-full text-gray-600 font-bold">
+        <div className="w-full text-gray-600">
           {field.title}
-          <span className="text-red-700 text-xs">
-            {error ? lang.isRequired : ''}
-          </span>
+          {error && (
+            <span className="text-red-700 text-xs">
+              {error.message ? error.message : lang.isRequired}
+            </span>
+          )}
         </div>
         <input
-          className={`w-full ${inputClasses} ${error ? 'border-red-400' : ''}`}
-          {...register(field.name, { required: field.required })}
+          className={classNames(
+            'w-full',
+            inputClasses,
+            error ? 'border-red-400' : '',
+          )}
+          {...register(field.name, {
+            required: field.required,
+            ...getFieldValidation(field, inputValidation),
+          })}
           {...options}
         />
       </div>
@@ -69,10 +91,13 @@ const defaultInputs: Omit<FormInputs, 'Upload' | 'Editor'> = {
   Enum({ field, value, error, register, setValue, disabled }) {
     const [state, setState] = useState(value);
     const enumType = useEnum(field.type);
-    const { lang, dir } = useContext(TableContext);
+    const { lang, dir, inputValidation } = useContext(TableContext);
 
     React.useEffect(() => {
-      register(field.name, { required: field.required });
+      register(field.name, {
+        required: field.required,
+        ...getFieldValidation(field, inputValidation),
+      });
     }, [register]);
 
     const options: Option[] = field.required
@@ -85,11 +110,13 @@ const defaultInputs: Omit<FormInputs, 'Upload' | 'Editor'> = {
     }
     return (
       <div className="flex flex-wrap w-full sm:w-1/2 pr-2 pt-2">
-        <div className="w-full text-gray-600 font-bold">
+        <div className="w-full text-gray-600">
           {field.title}
-          <span className="text-red-700 text-xs">
-            {error ? lang.isRequired : ''}
-          </span>
+          {error && (
+            <span className="text-red-700 text-xs">
+              {error.message ? error.message : lang.isRequired}
+            </span>
+          )}
         </div>
         <Select
           dir={dir}
@@ -151,7 +178,7 @@ const defaultInputs: Omit<FormInputs, 'Upload' | 'Editor'> = {
             connect={Object.keys(state).length > 0 ? result : {}}
             onConnect={(_value) => {
               setSate(_value);
-              setValue(field.name, _value, {
+              setValue(field.name, _value[model.idField], {
                 shouldValidate: true,
                 shouldDirty: true,
               });
@@ -159,7 +186,7 @@ const defaultInputs: Omit<FormInputs, 'Upload' | 'Editor'> = {
             }}
           />
         </Modal>
-        <div className="w-full text-gray-600 font-bold">
+        <div className="w-full text-gray-600">
           {field.title}
           <span className="text-red-700 text-xs">
             {error ? lang.isRequired : ''}
@@ -169,11 +196,11 @@ const defaultInputs: Omit<FormInputs, 'Upload' | 'Editor'> = {
           <button
             disabled={disabled}
             type="button"
-            className={
-              'absolute top-2.5 left-1 ' +
-              buttonClasses +
-              'rounded-md bg-transparent text-blue-600 hover:bg-blue-100 hover:bg-opacity-25'
-            }
+            className={classNames(
+              'absolute top-2.5 left-1',
+              buttonClasses,
+              'rounded-md bg-transparent text-blue-600 hover:bg-blue-100 hover:bg-opacity-25',
+            )}
             onClick={() => setModal(!modal)}
           >
             <SearchIcon className="h-5 w-5" />
@@ -182,11 +209,11 @@ const defaultInputs: Omit<FormInputs, 'Upload' | 'Editor'> = {
             <button
               disabled={disabled}
               type="button"
-              className={
-                'absolute top-2.5 right-1 ' +
-                buttonClasses +
-                'rounded-md bg-transparent text-red-600 hover:bg-red-100 hover:bg-opacity-25'
-              }
+              className={classNames(
+                'absolute top-2.5 right-1',
+                buttonClasses,
+                'rounded-md bg-transparent text-red-600 hover:bg-red-100 hover:bg-opacity-25',
+              )}
               onClick={() => {
                 setSate({});
                 setValue(field.name, null, {
@@ -199,7 +226,7 @@ const defaultInputs: Omit<FormInputs, 'Upload' | 'Editor'> = {
             </button>
           )}
           <input
-            className={`px-8 ${inputClasses}`}
+            className={inputClasses.replace('px-4', 'px-8')}
             value={getDisplayName(state, model)}
             disabled
           />
@@ -208,21 +235,30 @@ const defaultInputs: Omit<FormInputs, 'Upload' | 'Editor'> = {
     );
   },
   Date({ field, value, error, register, disabled }) {
-    const { lang } = useContext(TableContext);
+    const { lang, inputValidation } = useContext(TableContext);
     return (
       <div className="flex flex-wrap w-full sm:w-1/2 pr-2 pt-2">
-        <div className="w-full text-gray-600 font-bold">
+        <div className="w-full text-gray-600">
           {field.title}
-          <span className="text-red-700 text-xs">
-            {error ? lang.isRequired : ''}
-          </span>
+          {error && (
+            <span className="text-red-700 text-xs">
+              {error.message ? error.message : lang.isRequired}
+            </span>
+          )}
         </div>
         <input
-          className={`w-full ${inputClasses} ${error ? 'border-red-400' : ''}`}
+          className={classNames(
+            'w-full',
+            inputClasses,
+            error ? 'border-red-400' : '',
+          )}
           type="datetime-local"
           disabled={disabled}
           defaultValue={value ? getDate(new Date(value)) : undefined}
-          {...register(field.name, { required: field.required })}
+          {...register(field.name, {
+            required: field.required,
+            ...getFieldValidation(field, inputValidation),
+          })}
         />
       </div>
     );

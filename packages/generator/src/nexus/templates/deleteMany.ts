@@ -3,11 +3,8 @@ export default `
 
 #{exportTs}const #{Model}DeleteManyMutation = mutationField('deleteMany#{Model}', {
   type: nonNull('BatchPayload'),
-  args: {
-    where: '#{Model}WhereInput',
-  },
+  #{args}
   resolve: async (_parent, { where }, { #{prisma} }) => {
-    #{onDelete}
     return #{prisma}.#{model}.deleteMany({where}#{as})
   },
 });

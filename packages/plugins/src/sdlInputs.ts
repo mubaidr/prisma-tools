@@ -4,6 +4,8 @@ import { writeFileSync } from 'fs';
 
 interface OptionsType {
   dmmf?: DMMF.Document;
+  excludeFields?: string[];
+  filterInputs?: (input: DMMF.InputType) => DMMF.SchemaArg[];
   doNotUseFieldUpdateOperationsInput?: boolean;
 }
 
@@ -53,14 +55,15 @@ export const getInputType = (
   if (
     field.inputTypes.length > 1 &&
     (field.inputTypes[1].location === 'inputObjectTypes' ||
-      field.inputTypes[1].isList)
+      field.inputTypes[1].isList ||
+      field.inputTypes[1].type === 'Json')
   ) {
     index = 1;
   }
   return field.inputTypes[index];
 };
 
-function createInput(options?: OptionsType) {
+export function generateInputsString(options?: OptionsType) {
   let schema = options?.dmmf?.schema;
   if (!schema) {
     const { Prisma } = require('@prisma/client');
@@ -90,22 +93,28 @@ function createInput(options?: OptionsType) {
     if (schema.inputObjectTypes.model)
       inputObjectTypes.push(...schema.inputObjectTypes.model);
 
-    inputObjectTypes.forEach((model) => {
-      if (model.fields.length > 0) {
-        fileContent += `input ${model.name} {
+    inputObjectTypes.forEach((input) => {
+      if (input.fields.length > 0) {
+        fileContent += `input ${input.name} {
       `;
-        model.fields.forEach((field) => {
-          const inputType = getInputType(field, options);
-          const hasEmptyType =
-            inputType.location === 'inputObjectTypes' &&
-            hasEmptyTypeFields(inputType.type as string, options);
-          if (!hasEmptyType) {
-            fileContent += `${field.name}: ${
-              inputType.isList ? `[${inputType.type}!]` : inputType.type
-            }${field.isRequired ? '!' : ''}
+        const inputFields =
+          typeof options?.filterInputs === 'function'
+            ? options.filterInputs(input)
+            : input.fields;
+        inputFields
+          .filter((field) => !options?.excludeFields?.includes(field.name))
+          .forEach((field) => {
+            const inputType = getInputType(field, options);
+            const hasEmptyType =
+              inputType.location === 'inputObjectTypes' &&
+              hasEmptyTypeFields(inputType.type as string, options);
+            if (!hasEmptyType) {
+              fileContent += `${field.name}: ${
+                inputType.isList ? `[${inputType.type}!]` : inputType.type
+              }${field.isRequired ? '!' : ''}
         `;
-          }
-        });
+            }
+          });
         fileContent += `}
     
   `;
@@ -113,18 +122,24 @@ function createInput(options?: OptionsType) {
     });
 
     schema?.outputObjectTypes.prisma
-      .filter((type) => type.name.includes('Aggregate'))
+      .filter(
+        (type) =>
+          type.name.includes('Aggregate') ||
+          type.name.endsWith('CountOutputType'),
+      )
       .forEach((type) => {
         fileContent += `type ${type.name} {
       `;
-        type.fields.forEach((field) => {
-          fileContent += `${field.name}: ${
-            field.outputType.isList
-              ? `[${field.outputType.type}!]`
-              : field.outputType.type
-          }${!field.isNullable ? '!' : ''}
+        type.fields
+          .filter((field) => !options?.excludeFields?.includes(field.name))
+          .forEach((field) => {
+            fileContent += `${field.name}: ${
+              field.outputType.isList
+                ? `[${field.outputType.type}!]`
+                : field.outputType.type
+            }${!field.isNullable ? '!' : ''}
         `;
-        });
+          });
         fileContent += `}
     
   `;
@@ -136,7 +151,7 @@ function createInput(options?: OptionsType) {
 export const sdlInputs = (options?: OptionsType) => {
   const gql = require('graphql-tag');
   return gql`
-    ${createInput(options)}
+    ${generateInputsString(options)}
   `;
 };
 

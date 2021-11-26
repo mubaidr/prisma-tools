@@ -8,7 +8,7 @@ import {
   GetColumns,
 } from '../../types';
 import { TableContext } from '../Context';
-import { buttonClasses } from '../../components/css';
+import { buttonClasses, classNames } from '../../components/css';
 
 const columnsObject: GetColumns = (field, model) => ({
   boolean: {
@@ -39,14 +39,14 @@ const columnsObject: GetColumns = (field, model) => ({
     Header: field.title,
     accessor: field.name,
     minWidth: 200,
-    disableFilters: !field.filter,
+
     disableSortBy: !field.sort,
     Cell: ({ value }) => (value ? new Date(value).toLocaleString() : ''),
   },
   object: {
     Header: field.title,
     accessor: field.name,
-    disableFilters: !field.filter,
+
     disableSortBy: true,
     Cell: ({ value }) => {
       const {
@@ -72,10 +72,10 @@ const columnsObject: GetColumns = (field, model) => ({
             padding: 0,
             textTransform: 'none',
           }}
-          className={
-            buttonClasses +
-            'rounded-md py-2 px-4 bg-transparent text-blue-600 hover:bg-blue-100 hover:bg-opacity-25'
-          }
+          className={classNames(
+            buttonClasses,
+            'rounded-md py-2 px-4 bg-transparent text-blue-600 hover:bg-blue-100 hover:bg-opacity-25',
+          )}
         >
           {getDisplayName(value, model)}
         </button>
@@ -99,18 +99,18 @@ const columnsObject: GetColumns = (field, model) => ({
   list: {
     Header: field.title,
     accessor: field.name,
-    disableFilters: !field.filter,
+
     disableSortBy: true,
     Cell: ({ row }) => {
       const { push, pagesPath, lang } = useContext(TableContext);
       if (!model) return <></>;
-      const id = (row.original as any).id;
+      const id = (row.original as any)[model.idField];
       return (
         <button
-          className={
-            buttonClasses +
-            'rounded-md py-2 px-4 bg-transparent text-blue-600 hover:bg-blue-100 hover:bg-opacity-25'
-          }
+          className={classNames(
+            buttonClasses,
+            'rounded-md py-2 px-4 bg-transparent text-blue-600 hover:bg-blue-100 hover:bg-opacity-25',
+          )}
           onClick={() => push(`${pagesPath}${field.type}?${model.id}=${id}`)}
         >
           {lang.show}

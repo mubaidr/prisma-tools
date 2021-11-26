@@ -33,7 +33,7 @@ export class GenerateSdl extends Generators {
 
   private async createModels() {
     const dataModels = await this.datamodel();
-    (await this.models()).forEach((model) => {
+    for (const model of await this.models()) {
       const dataModel = this.dataModel(dataModels.models, model.name);
       const modelDocs = this.filterDocs(dataModel?.documentation);
       let fileContent = `${modelDocs ? `"""${modelDocs}"""\n` : ''}type ${
@@ -44,6 +44,9 @@ export class GenerateSdl extends Generators {
         if (!excludeFields.includes(field.name)) {
           const dataField = this.dataField(field.name, dataModel);
           const fieldDocs = this.filterDocs(dataField?.documentation);
+          if (this.shouldOmit(fieldDocs)) {
+            return;
+          }
           fileContent += `
           ${fieldDocs ? `"""${fieldDocs}"""\n` : ''}${field.name}`;
           if (field.args.length > 0) {
@@ -62,23 +65,18 @@ export class GenerateSdl extends Generators {
         }
       });
 
-      fileContent += `}\n\n`;
-      this.createFiles(model.name, fileContent);
-    });
+      fileContent += `\n}\n\n`;
+      await this.createFiles(model.name, fileContent);
+    }
   }
 
-  private getOperations(model: string) {
+  private async getOperations(model: string) {
     const exclude = this.excludedOperations(model);
-    return createQueriesAndMutations(
-      model,
-      exclude,
-      this.options.prismaName,
-      this.options.onDelete,
-    );
+    return await createQueriesAndMutations(model, exclude, this);
   }
 
-  private createFiles(model: string, typeContent: string) {
-    const operations = this.getOperations(model);
+  private async createFiles(model: string, typeContent: string) {
+    const operations = await this.getOperations(model);
     this.mkdir(this.output(model));
 
     let resolvers = '';
@@ -133,13 +131,13 @@ export class GenerateSdl extends Generators {
   private createTypes(fileContent: string, model: string) {
     if (this.isJS) {
       fileContent = `const { default: gql } = require('graphql-tag');\n
-    const ${model} = gql\`\n${fileContent}\n\`;\n
+    const ${model} = gql\`\n${this.formation(fileContent, 'graphql')}\n\`;\n
     module.exports = { 
       ${model}
       }`;
     } else {
       fileContent = `import gql from 'graphql-tag';\n
-    export default gql\`\n${fileContent}\n\`;\n`;
+    export default gql\`\n${this.formation(fileContent, 'graphql')}\n\`;\n`;
     }
 
     writeFileSync(

@@ -17,11 +17,14 @@ import {
 } from 'fs';
 import { framework, getPath } from './utils/excludeSettings';
 
+// update to add new FrameWork
 export type Frameworks =
   | 'Material UI'
   | 'Material UI + PrismaAdmin UI'
   | 'Tailwind CSS'
-  | 'Tailwind CSS + PrismaAdmin UI';
+  | 'Tailwind CSS + PrismaAdmin UI'
+  | 'Chakra UI'
+  | 'Chakra UI + PrismaAdmin UI';
 
 export interface AppGeneratorOptions {
   example: Examples;
@@ -264,23 +267,32 @@ export class AppGenerator {
   readDir(path: string) {
     const files = readdirSync(path);
     const frameworkExclude = framework[this.options.framework as Frameworks];
-    const withAdmin = !['Tailwind CSS', 'Material UI'].includes(
+    // update to add new FrameWork
+    const withAdmin = !['Tailwind CSS', 'Material UI', 'Chakra UI'].includes(
       this.options.framework as Frameworks,
+    );
+    const frameworksFolders = ['material', 'tailwind', 'chakra'].filter(
+      (item) => item !== frameworkExclude.folder,
     );
     for (const file of files) {
       if (
         this.excludeMulti(file) &&
         !frameworkExclude.files.includes(file) &&
+        !frameworksFolders.includes(file) &&
         file !== '_app'
       ) {
         const newName = file.replace('multi_', '');
         if (lstatSync(join(path, file)).isDirectory()) {
-          if (file !== 'multi_prisma' && !path.endsWith('components')) {
+          if (
+            !['multi_prisma', frameworkExclude.folder].includes(file) &&
+            !path.endsWith('components') &&
+            !path.includes(frameworkExclude.folder)
+          ) {
             this.newDir(
               join(
                 this.destinationPath(),
-                getPath(path, this.sourceRoot),
-                path.endsWith('layouts') ? 'Admin' : newName,
+                getPath(path, this.sourceRoot, frameworkExclude.folder),
+                newName,
               ),
             );
           }
@@ -291,7 +303,7 @@ export class AppGenerator {
               join(path.replace('pages', '_app'), frameworkExclude.app),
               join(
                 this.destinationPath(),
-                getPath(path, this.sourceRoot),
+                getPath(path, this.sourceRoot, frameworkExclude.folder),
                 newName,
               ),
             );
@@ -303,7 +315,7 @@ export class AppGenerator {
             writeFileSync(
               join(
                 this.destinationPath(),
-                getPath(path, this.sourceRoot),
+                getPath(path, this.sourceRoot, frameworkExclude.folder),
                 newName,
               ),
               newName === 'nexusSchema.ts'
@@ -331,7 +343,7 @@ export class AppGenerator {
               join(path, file),
               join(
                 this.destinationPath(),
-                getPath(path, this.sourceRoot),
+                getPath(path, this.sourceRoot, frameworkExclude.folder),
                 newName,
               ),
             );
